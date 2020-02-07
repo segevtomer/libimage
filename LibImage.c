@@ -1,6 +1,5 @@
 #include "libimage.h"
 
-
 void readFromBuffer(png_structp png_ptr, png_bytep dataBuffer, png_size_t bytesToRead)
 {
     png_voidp io_ptr = png_get_io_ptr(png_ptr);
@@ -448,45 +447,6 @@ bool handleEightBitRgbaPaving(Image* image, int numOfImgs, Image*** imageChunks)
     return true;
 }
 
-bool splitImage(int numOfImgs, Image* image)
-{
-    size_t newHeight = image->height / numOfImgs;
-    size_t newWidth = image->width / numOfImgs;
-    int travDistance = numOfImgs - 1;
-    byte** rows = image->rowPtrs;
-
-    byte** newRows = createAvgImage(rows, newHeight, newWidth, numOfImgs);
-    if (!newRows) 
-    {
-        return false;
-    }
-
-    int outerY, outerX;
-    size_t y, x;
-    for (outerY = 0; outerY < numOfImgs; ++outerY)
-    {
-        for (outerX = 0; outerX < numOfImgs; ++outerX)
-        {
-            size_t y_offest = outerY * newHeight;
-            size_t x_offest = outerX * newWidth * 4;
-            for (y = 0; y < newHeight; ++y)
-            {
-                byte* row = rows[y + y_offest];
-                byte* newRow = newRows[y];
-                for (x = 0; x < newWidth; ++x) 
-                {
-                    unsigned int pos = x * 4;
-                    row[pos + x_offest] = newRow[pos];
-                    row[pos + x_offest + 1] = newRow[pos + 1];
-                    row[pos + x_offest + 2] = newRow[pos + 2];
-                    row[pos + x_offest + 3] = newRow[pos + 3];
-                }
-            }
-        }
-    }
-    return true;
-}
-
 byte** createAvgImage(byte** rows, size_t newHeight, size_t newWidth, int numOfImgs)
 {
     byte** newRows = (byte**)malloc(sizeof(byte*) * newHeight);
@@ -545,7 +505,6 @@ void calcAverage(byte** rows, int avgDim, size_t start_x, size_t start_y, int* a
     }
 }
 
-
 /*
 * the library didn't use the file system as requested, however,
 * writePngToFile and the main were made for QA purposes to make
@@ -574,11 +533,18 @@ void writePngToFile(Image* image, char* fileName)
 
 int main(int argc, char* argv[])
 {
+    if (argc < 2)
+    {
+        printf("for testing, input argument == imagename\n");
+        return -1;
+    }
+    
+
     FILE* fp;
     byte* buf, * buf2, * buf3;
     long flen;
 
-    fp = fopen("image2.png", "rb");
+    fp = fopen(argv[1], "rb");
     fseek(fp, 0, SEEK_END);
     flen = ftell(fp);
     fseek(fp, 0, SEEK_SET);
@@ -646,7 +612,7 @@ int main(int argc, char* argv[])
     for (i = 0; i < size*size; ++i)
     {
         char buf[10];
-        sprintf(buf, "tst%d.png", i);
+        sprintf(buf, "tst%d.png", i+1);
         writePngToFile(images[i], buf);
     }
     
