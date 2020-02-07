@@ -125,7 +125,7 @@ enum colorType pngColorTypeDictionary(byte colorType)
     }
 }
 
-bool openImage(const byte* inBuffer, Image** image)
+bool openImage(byte* inBuffer, Image** image)
 {
     enum format imageFormat = isFormatSupported(inBuffer);
     switch (imageFormat)
@@ -142,7 +142,7 @@ bool openImage(const byte* inBuffer, Image** image)
     }
 }
 
-bool handleOpenPng(const byte* inBuffer, Image** image)
+bool handleOpenPng(byte* inBuffer, Image** image)
 {
     png_structp png_ptr = png_create_read_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
     if (!png_ptr)
@@ -322,7 +322,7 @@ bool handleSavePng(Image* image, byte** outBuffer)
 
     freeRows(image->rowPtrs, image->height);
     free(image);    
-    png_destroy_read_struct(&png_ptr, &info_ptr, (png_infopp)NULL);
+    png_destroy_write_struct(&png_ptr, &info_ptr);
 
     *outBuffer = pngWriteBuffer.buf;
     return true;
@@ -370,10 +370,9 @@ bool handleEightBitRgbaPaving(Image* image, int numOfImgs, Image*** imageChunks)
 {
     size_t newHeight = image->height / numOfImgs;
     size_t newWidth = image->width / numOfImgs;
-    int travDistance = numOfImgs - 1;
     byte** rows = image->rowPtrs;
-
-    int size = numOfImgs * numOfImgs;
+    int travDistance = numOfImgs - 1;
+    int i, size = numOfImgs * numOfImgs;
     byte*** newRowsList = (byte***)malloc(sizeof(byte**) * size);
     if (!newRowsList)
     {
@@ -392,7 +391,6 @@ bool handleEightBitRgbaPaving(Image* image, int numOfImgs, Image*** imageChunks)
             if (!newRows)
             {
                 printf("allocation for chunked image list failed\n");
-                int i;
                 for (i = 0; i < chunkOffest; ++i)
                 {
                     freeRows(newRowsList[i], newHeight);
@@ -434,15 +432,15 @@ bool handleEightBitRgbaPaving(Image* image, int numOfImgs, Image*** imageChunks)
 
     Image** images = (Image**)malloc(sizeof(Image*) * size);
 
-    for (x = 0; x < size; ++x)
+    for (i = 0; i < size; ++i)
     {
-        images[x] = (Image*)malloc(sizeof(Image));
-        images[x]->height = newHeight;
-        images[x]->width = newWidth;
-        images[x]->bitDepth = image->bitDepth;
-        images[x]->colorTypeVal = image->colorTypeVal;
-        images[x]->colorTypeEnum = image->colorTypeEnum;
-        images[x]->rowPtrs = newRowsList[x];
+        images[i] = (Image*)malloc(sizeof(Image));
+        images[i]->height = newHeight;
+        images[i]->width = newWidth;
+        images[i]->bitDepth = image->bitDepth;
+        images[i]->colorTypeVal = image->colorTypeVal;
+        images[i]->colorTypeEnum = image->colorTypeEnum;
+        images[i]->rowPtrs = newRowsList[i];
     }
 
     *imageChunks = images;
@@ -540,16 +538,26 @@ void calcAverage(byte** rows, int avgDim, size_t start_x, size_t start_y, int* a
             sum[3] += row[pos];
         }
     }
-    int size = avgDim * avgDim;
-    for (x = 0; x < 4; ++x)
+    int i, size = avgDim * avgDim;
+    for (i = 0; i < 4; ++i)
     {
-        avgs[x] = sum[x] / size;
+        avgs[i] = sum[i] / size;
     }
 }
 
-void write_png_file(Image* image, char* file_name)
+
+/*
+* the library didn't use the file system as requested, however,
+* writePngToFile and the main were made for QA purposes to make
+* sure that the binary data represents the image faithfully
+*
+* there is no error handling because it was written solely
+* for testing and not for internal/external usage in any way
+*/
+
+void writePngToFile(Image* image, char* fileName)
 {
-    FILE* fp = fopen(file_name, "wb");
+    FILE* fp = fopen(fileName, "wb");
     png_structp png_ptr = png_create_write_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
     png_infop info_ptr = png_create_info_struct(png_ptr);
     if (setjmp(png_jmpbuf(png_ptr)))
@@ -564,10 +572,10 @@ void write_png_file(Image* image, char* file_name)
     fclose(fp);
 }
 
-int main()
+int main(int argc, char* argv[])
 {
     FILE* fp;
-    byte* buffer, *buf2, *buf3, *buf4;
+    byte* buf, * buf2, * buf3;
     long flen;
 
     fp = fopen("image2.png", "rb");
@@ -575,49 +583,71 @@ int main()
     flen = ftell(fp);
     fseek(fp, 0, SEEK_SET);
 
-    buffer = (byte*)malloc((flen) * sizeof(byte));
-    size_t bytes_read = fread(buffer, sizeof(byte), flen, fp);
+    buf = (byte*)malloc((flen) * sizeof(byte));
+    size_t bytes_read = fread(buf, sizeof(byte), flen, fp);
     fclose(fp);
-    buf2 = buf3 = buf4 =buffer;
+    buf2 = buf3 = buf;
 
-    Image* image = NULL;
-    if (openImage(buf2, &image))
+    Image* image, *image2, *image3, **images;
+    if (openImage(buf, &image))
+        printf("open success #1!\nsaving as test1\n\n");
+    else 
     {
-        printf("success!!!!!!\n");
-    }
-    byte* buf = NULL;
-
-    write_png_file(image, "test1.png");
-
-    if (saveImage(image, "pNg", &buf))
-    {
-        printf("double success!!\n");
+        printf("open error\n"); 
+        return -1;
     }
 
-    Image* image2 = NULL;
-    if (openImage(buf, &image2))
-        printf("success!!!!!!\n");
-    printf("average this mfer!\n");
-    averageImage(4, image2);
+    writePngToFile(image, "test1.png");
 
-    write_png_file(image2, "test2.png");
+    if (saveImage(image, "pNg", &buf2))
+        printf("save #1 to buffer success\n");
+    else
+    {
+        printf("save #1 error\n");
+        return -1;
+    }
+    if (openImage(buf2, &image2))
+        printf("open success #2!\n");
+    else
+    {
+        printf("open #2 error\n");
+        return -1;
+    }
+    if (averageImage(4, image2))
+        printf("average success\nsaving as test2\n\n");
+    else
+    {
+        printf("average error\n");
+        return -1;
+    }
+    writePngToFile(image2, "test2.png");
     
-    saveImage(image2,"png", &buf3);
-
-    Image* image3 = NULL;
-    if (openImage(buf3, &image3))
+    if(saveImage(image2,"png", &buf3))
+        printf("save #2 to buffer success\n");
+    else
     {
-        printf("get ready for zeruf\n");
+        printf("save #2 error\n");
+        return -1;
     }
-    Image** images;
+
+    if (openImage(buf3, &image3))
+        printf("open #3 success\n");
+
     int size = 4;
-    paveImage(size, image3, &images);
+    if (paveImage(size, image3, &images))
+        printf("pave success\nsaving chunks as tst1-%d\n",size*size);
+    else
+    {
+        printf("paving error\n");
+        return -1;
+    }
+   
     int i;
     for (i = 0; i < size*size; ++i)
     {
         char buf[10];
         sprintf(buf, "tst%d.png", i);
-        write_png_file(images[i], buf);
+        writePngToFile(images[i], buf);
     }
     
     return 0;
