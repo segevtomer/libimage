@@ -31,6 +31,8 @@
 * current implementation, due to time constraints, supports only 8 bit-depth RGBA
 * PNG images (for average and pave manipulations). support for other variations is
 * expandable and the only detriment for it under development was time limitations.
+*
+* the code was developed and tested using libpng16
 */
 
 enum format
@@ -87,12 +89,12 @@ typedef struct
 
 
 /*
-* receives a byte array and a NULL image ptr, verifies the format
+* receives a byte array and a ptr to NULL image ptr, verifies the format
 * is supported and redirects it to the relevant format-open-handler
-* ret val is indicaction of success, in case of success 'image' will
+* ret val is indicaction of success, in case of success '*image' will
 * be allocated with the image data
 */
-bool openImage(const byte* buf, Image** image);
+bool openImage(byte* buf, Image** image);
 
 /*
 * receives an image ptr, format string and NULL ptr of byte array, verifies the save
@@ -113,6 +115,8 @@ bool averageImage(int avgDim, Image* image);
 * receives an image ptr, the requested num of images to split the image in-to
 * and the ptr to the (not-yet-allocated and-) soon to be array of chunked images
 * the number of images determines how many chunks are to be made (numOfImages^2)
+* the leftover edge pixels that do not fit in the fixed dimension (the same for 
+* each chunk) are trimmed, leaving a fixed number of symmetrical image chunks.
 * in case of success, imageChunks will now point to an array of allocated image
 * ptrs where each image ptr holds the data of a chunk of the original image
 */
@@ -154,10 +158,10 @@ void writeToBuffer(png_structp png_ptr, png_bytep dataBuffer, png_size_t bytesTo
 * specific type handlers that are called from their generic external counterparts
 * in the case of addition of future formats, each format will receive its own handler
 */
-bool handleOpenPng(const byte* buf, Image** image);
-bool handleOpenJpeg(const byte* buf, Image** image);
+bool handleOpenPng(byte* buf, Image** image);
 bool handleSavePng(Image* image, byte** buf);
-bool handleSaveJpeg(Image* image, byte** buf);
+/* bool handleOpenJpeg(const byte* buf, Image** image);
+   bool handleSaveJpeg(Image* image, byte** buf);*/
 
 /*
 * helper function for freeing allocated image data
@@ -185,3 +189,12 @@ enum format isFormatSupported(const byte* buf);
 * format will need to follow this convention (define uppercased constant)
 */
 bool formatCompIgnoreCase(const char* s1, const char* s2);
+
+/*
+* translates between the byte value of color-type in the png metadata
+* and the corresponding color-type enum. the reason a conversion function
+* was made instead of just setting the enum's values to match with the 
+* color-type values is for cross-type compatibility, each type will have
+* its own dictionary for translation of color-type
+*/
+enum colorType pngColorTypeDictionary(byte colorType);
