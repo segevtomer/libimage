@@ -166,7 +166,7 @@ bool handleOpenPng(byte* inBuffer, Image** image)
     }
 
     Buffer pngReadBuffer = { inBuffer, 0 };
-    png_set_read_fn(png_ptr, &pngReadBuffer, readFromBuffer); 
+    png_set_read_fn(png_ptr, &pngReadBuffer, readFromBuffer);
     png_set_sig_bytes(png_ptr, 0);
 
     png_read_info(png_ptr, info_ptr);
@@ -191,7 +191,7 @@ bool handleOpenPng(byte* inBuffer, Image** image)
     png_read_update_info(png_ptr, info_ptr);
 
     rowPtrs = (byte**)malloc(sizeof(byte*) * height);
-    if (!rowPtrs) 
+    if (!rowPtrs)
     {
         printf("allocation for binary image data failed\n");
         png_destroy_read_struct(&png_ptr, &info_ptr, (png_infopp)NULL);
@@ -213,7 +213,7 @@ bool handleOpenPng(byte* inBuffer, Image** image)
     if (setjmp(png_jmpbuf(png_ptr)))
     {
         printf("failed reading the image\n");
-        freeRows(rowPtrs,height);
+        freeRows(rowPtrs, height);
         png_destroy_read_struct(&png_ptr, &info_ptr, (png_infopp)NULL);
         return false;
     }
@@ -242,7 +242,7 @@ bool handleOpenPng(byte* inBuffer, Image** image)
     return true;
 }
 
-void freeRows(byte** rowPtrs, size_t height) 
+void freeRows(byte** rowPtrs, size_t height)
 {
     size_t i;
     for (i = 0; i < height; ++i)
@@ -320,7 +320,7 @@ bool handleSavePng(Image* image, byte** outBuffer)
     png_write_png(png_ptr, info_ptr, PNG_TRANSFORM_IDENTITY, NULL);
 
     freeRows(image->rowPtrs, image->height);
-    free(image);    
+    free(image);
     png_destroy_write_struct(&png_ptr, &info_ptr);
 
     *outBuffer = pngWriteBuffer.buf;
@@ -356,8 +356,66 @@ bool handleEightBitRgbaAveraging(Image* image, int avgDim)
     return true;
 }
 
+byte** createAvgImage(byte** rows, size_t newHeight, size_t newWidth, int numOfImgs)
+{
+    byte** newRows = (byte**)malloc(sizeof(byte*) * newHeight);
+    if (!newRows)
+    {
+        printf("failed to allocate memory for averaged image");
+        return NULL;
+    }
+
+    size_t y, x;
+    for (y = 0; y < newHeight; ++y)
+    {
+        byte* row = rows[y];
+        byte* newRow = (byte*)malloc(sizeof(byte) * newWidth * 4);
+        if (!newRow)
+        {
+            printf("failed to allocate memory for averaged image");
+            freeRows(newRows, y);
+            return NULL;
+        }
+        newRows[y] = newRow;
+        for (x = 0; x < newWidth; ++x)
+        {
+            size_t pos = x * 4;
+            int avgs[4] = { 0 };
+            calcAverage(rows, numOfImgs, pos * numOfImgs, y * numOfImgs, avgs);
+            newRow[pos++] = avgs[0];
+            newRow[pos++] = avgs[1];
+            newRow[pos++] = avgs[2];
+            newRow[pos] = avgs[3];
+        }
+    }
+    return newRows;
+}
+
+void calcAverage(byte** rows, int avgDim, size_t start_x, size_t start_y, int* avgs)
+{
+    int y = 0, x = 0;
+    int sum[4] = { 0 };
+    for (y = 0; y < avgDim; ++y)
+    {
+        byte* row = rows[y + start_y];
+        for (x = 0; x < avgDim * 4; x += 4)
+        {
+            size_t pos = x + start_x;
+            sum[0] += row[pos++];
+            sum[1] += row[pos++];
+            sum[2] += row[pos++];
+            sum[3] += row[pos];
+        }
+    }
+    int i, size = avgDim * avgDim;
+    for (i = 0; i < 4; ++i)
+    {
+        avgs[i] = sum[i] / size;
+    }
+}
+
 bool paveImage(int numOfImgs, Image* image, Image*** imageChunks)
-{   
+{
     if (image->colorTypeEnum == RGBA && image->bitDepth == 8)
     {
         return handleEightBitRgbaPaving(image, numOfImgs, imageChunks);
@@ -447,64 +505,6 @@ bool handleEightBitRgbaPaving(Image* image, int numOfImgs, Image*** imageChunks)
     return true;
 }
 
-byte** createAvgImage(byte** rows, size_t newHeight, size_t newWidth, int numOfImgs)
-{
-    byte** newRows = (byte**)malloc(sizeof(byte*) * newHeight);
-    if (!newRows)
-    {
-        printf("failed to allocate memory for averaged image");
-        return NULL;
-    }
-
-    size_t y, x;
-    for (y = 0; y < newHeight; ++y)
-    {
-        byte* row = rows[y];
-        byte* newRow = (byte*)malloc(sizeof(byte) * newWidth * 4);
-        if (!newRow)
-        {
-            printf("failed to allocate memory for averaged image");
-            freeRows(newRows, y);
-            return NULL;
-        }
-        newRows[y] = newRow;
-        for (x = 0; x < newWidth; ++x)
-        {
-            size_t pos = x * 4;
-            int avgs[4] = { 0 };
-            calcAverage(rows, numOfImgs, pos * numOfImgs, y * numOfImgs, avgs);
-            newRow[pos++] = avgs[0];
-            newRow[pos++] = avgs[1];
-            newRow[pos++] = avgs[2];
-            newRow[pos] = avgs[3];
-        }
-    }
-    return newRows;
-}
-
-void calcAverage(byte** rows, int avgDim, size_t start_x, size_t start_y, int* avgs)
-{
-    int y = 0, x = 0;
-    int sum[4] = { 0 };
-    for (y = 0; y < avgDim; ++y)
-    {
-        byte* row = rows[y + start_y];
-        for (x = 0; x < avgDim * 4; x += 4)
-        {
-            size_t pos = x + start_x;
-            sum[0] += row[pos++];
-            sum[1] += row[pos++];
-            sum[2] += row[pos++];
-            sum[3] += row[pos];
-        }
-    }
-    int i, size = avgDim * avgDim;
-    for (i = 0; i < 4; ++i)
-    {
-        avgs[i] = sum[i] / size;
-    }
-}
-
 /*
 * the library didn't use the file system as requested, however,
 * writePngToFile and the main were made for QA purposes to make
@@ -538,7 +538,6 @@ int main(int argc, char* argv[])
         printf("for testing, input argument == imagename\n");
         return -1;
     }
-    
 
     FILE* fp;
     byte* buf, * buf2, * buf3;
@@ -554,12 +553,12 @@ int main(int argc, char* argv[])
     fclose(fp);
     buf2 = buf3 = buf;
 
-    Image* image, *image2, *image3, **images;
+    Image* image, * image2, * image3, ** images;
     if (openImage(buf, &image))
         printf("open success #1!\nsaving as test1\n\n");
-    else 
+    else
     {
-        printf("open error\n"); 
+        printf("open error\n");
         return -1;
     }
 
@@ -587,8 +586,8 @@ int main(int argc, char* argv[])
         return -1;
     }
     writePngToFile(image2, "test2.png");
-    
-    if(saveImage(image2,"png", &buf3))
+
+    if (saveImage(image2, "png", &buf3))
         printf("save #2 to buffer success\n");
     else
     {
@@ -597,24 +596,23 @@ int main(int argc, char* argv[])
     }
 
     if (openImage(buf3, &image3))
-        printf("open #3 success\n");
+        printf("open #3 (using save #2's buffer) success\n");
 
     int size = 4;
     if (paveImage(size, image3, &images))
-        printf("pave success\nsaving chunks as tst1-%d\n",size*size);
+        printf("pave success\nsaving chunks as tst1-%d\n", size * size);
     else
     {
         printf("paving error\n");
         return -1;
     }
-   
+
     int i;
-    for (i = 0; i < size*size; ++i)
+    for (i = 0; i < size * size; ++i)
     {
         char buf[10];
-        sprintf(buf, "tst%d.png", i+1);
+        sprintf(buf, "tst%d.png", i + 1);
         writePngToFile(images[i], buf);
     }
-    
     return 0;
 }
