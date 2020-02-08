@@ -89,7 +89,7 @@ typedef struct
 
 
 /*
- * receives a byte array and a ptr to NULL image ptr, verifies the format
+ * receives a byte array and a ptr to image ptr, verifies the format
  * is supported and redirects it to the relevant format-open-handler
  * ret val is indicaction of success, in case of success '*image' will
  * be allocated with the image data
@@ -97,8 +97,8 @@ typedef struct
 bool openImage(byte* buf, Image** image);
 
 /*
- * receives an image ptr, format string and NULL ptr of byte array, verifies the save
- * format is supported and redirects it to the relevant format-save-handler
+ * receives an image ptr, format string and a ptr to a ptr of byte array, verifies the
+ * save format is supported and redirects it to the relevant format-save-handler
  * ret val is indicaction of success, in case of success retBuffer will reference the
  * address of the byte array that is the binary representation of the Image argument
  */
